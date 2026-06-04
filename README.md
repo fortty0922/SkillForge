@@ -42,11 +42,15 @@ flowchart TD
     subgraph S4["Step 4　影片掛載　Gemini + YouTube API"]
         D0{還有未處理章節?}
         D0 -- 是 --> D1
-        D1["4a　LLM 生成搜尋詞\n[search query]"] --> D2{candidateCache\n命中?}
-        D2 -- 是 --> D4
-        D2 -- 否 --> D3[YouTube Search API]
-        D3 --> D4["4b　LLM 判斷相關性\n[adequate?]"]
-        D4 --> OBS3{Obs3\nadequate?}
+        D1["4a　LLM 生成搜尋詞\n[search query]"] --> D2{session\ncandidateCache?}
+        D2 -- 命中 --> D4b
+        D2 -- 未命中 --> D3{local RAG\nstore 命中?}
+        D3 -- "是 → [rag]" --> D4b
+        D3 -- "否 → [search]" --> DYT[YouTube Search API]
+        DYT --> DSAVE[持久化至\ndata/candidates.json]
+        DSAVE --> D4b
+        D4b["4b　LLM 判斷相關性\n[adequate?]"]
+        D4b --> OBS3{Obs3\nadequate?}
         OBS3 -- "否，retries < 2" --> D5[清除 cache\n重搜]
         D5 --> D1
         OBS3 -- "否，retries ≥ 2" --> D6[degraded 標記]
@@ -82,11 +86,14 @@ flowchart LR
     subgraph L3["第三層　Tool 層"]
         YT["YouTube Search\nData API v3\n100 units/次"]
         Meta["Metadata Parser\n解析 description\n章節時間戳\n純字串，無網路"]
+        RAG["RAG Store\ndata/candidates.json\n本地關鍵字檢索\n跨 session 持久化"]
     end
 
     Core -- "forStep(step)" --> Factory
+    Core -- "searchLocal()" --> RAG
     Core -- "searchYouTube()" --> YT
     Core -- "parseTimestamps()" --> Meta
+    YT -- "addCandidates()" --> RAG
 ```
 
 ---
@@ -96,7 +103,7 @@ flowchart LR
 ```
 SkillForge/
 ├── prompts/               # 各步驟 system prompt（md 檔）
-│   ├── base.md            # 共用身分宣告
+│   ├── base.md            # 共用身分宣告 + 語言規則
 │   ├── assess.md
 │   ├── generate.md
 │   ├── choose.md
@@ -116,7 +123,10 @@ SkillForge/
 │   │   └── factory.ts        # step → model 派工表
 │   └── tools/
 │       ├── youtubeSearch.ts  # YouTube Data API v3
-│       └── metadataParser.ts # 解析影片章節時間戳
+│       ├── metadataParser.ts # 解析影片章節時間戳
+│       └── ragStore.ts       # 本地 RAG：持久化 + 關鍵字搜尋
+├── data/                  # 執行時自動建立，gitignored
+│   └── candidates.json    # 跨 session 影片資源庫
 ├── .env.example
 ├── package.json
 └── tsconfig.json
@@ -191,7 +201,12 @@ Lecture is ready! Do you prefer concept-first or practice-first?
 
 [step: attach]
   attaching video for: "Type Annotations"
+  [4a query] "TypeScript Type Annotations tutorial"
+  [search] 5 result(s) from YouTube      ← 第一次：打 API 並存入本地庫
+
   attaching video for: "Interfaces"
+  [4a query] "TypeScript Interfaces tutorial"
+  [rag] 3 local result(s)                ← 之後：直接從本地庫取，不耗配額
   ...
 
 [step: synthesize]
@@ -239,6 +254,12 @@ npm run test        # 跑模擬測試（不需 API Key）
 
 YouTube Data API v3 預設每日 **10,000 units**，每次搜尋消耗 **100 units**。
 
-Agent 內建兩道防護：
-1. **`candidateCache`** — 相同搜尋詞直接複用，不重打 API
-2. **`searchRetries` 上限** — 每章節最多重搜 2 次，超過即降級標記
+Agent 內建三道防護：
+
+| 層 | 機制 | 說明 |
+|----|------|------|
+| 1 | **Local RAG Store** | 跨 session 持久化，相同主題第二次起不打 API |
+| 2 | **`candidateCache`** | session 內快取，同一 query 不重複呼叫 |
+| 3 | **`searchRetries` 上限** | 每章節最多重搜 2 次，超過即降級標記 |
+
+搜尋結果存於 `data/candidates.json`（自動建立，已 gitignore）。
