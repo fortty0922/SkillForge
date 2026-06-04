@@ -37,15 +37,21 @@ flowchart TD
     D3 --> S5
 
     S5(["Step 5　整合輸出"])
-    S5 --> End([fa:fa-book 學習藍圖])
+    S5 --> S6
+
+    S6(["Step 6　品質評估\nGemini"])
+    S6 --> O6{approved?}
+    O6 -- "否，retries ＜ 1" --> D6["注入 feedback\n重置內容"]
+    D6 --> S2
+    O6 -- 是 --> End([fa:fa-book 學習藍圖])
 
     classDef step fill:#4A90D9,stroke:#2C6FAC,color:#fff,rx:8
     classDef obs  fill:#F5A623,stroke:#C47D0E,color:#fff
     classDef degrade fill:#E74C3C,stroke:#C0392B,color:#fff
     classDef io fill:#27AE60,stroke:#1E8449,color:#fff
-    class S1,S2,S3,S4,S5 step
-    class O1,O2,O3 obs
-    class D1,D3 degrade
+    class S1,S2,S3,S4,S5,S6 step
+    class O1,O2,O3,O6 obs
+    class D1,D3,D6 degrade
     class Start,End io
 ```
 
@@ -130,7 +136,8 @@ SkillForge/
 │   ├── generate.md
 │   ├── choose.md
 │   ├── attach-4a.md
-│   └── attach-4b.md
+│   ├── attach-4b.md
+│   └── reflect.md         # 品質評估：深度匹配、影片覆蓋、時間戳有效性
 ├── src/
 │   ├── index.ts           # CLI 入口
 │   ├── types.ts           # 所有型別定義
@@ -233,11 +240,12 @@ Lecture is ready! Do you prefer concept-first or practice-first?
 
 [step: synthesize] [model: gemini/gemini-1.5-flash]
 # Learning Blueprint: TypeScript
-Level: some | Style: practice-first
-
-## Type Annotations
 ...
-🎬 [TypeScript Tutorial for Beginners](https://youtu.be/xxx?t=120) (2:00 – 8:30)
+
+[step: reflect]   [model: gemini/gemini-1.5-flash]
+[reflect] Blueprint looks good for a "some" level learner.
+                                   ← approved → done
+                                   ← 或 regenerate → 退回 generate 重做
 ```
 
 ---
@@ -252,7 +260,7 @@ npm run test        # 跑模擬測試（不需 API Key）
 
 ### 模擬測試
 
-`src/test/agentLoop.test.ts` 使用 Mock Provider 和 Mock Search Function，不需要任何 API Key 即可跑完整的 5 步 ReAct 迴圈驗證。
+`src/test/agentLoop.test.ts` 使用 Mock Provider 和 Mock Search Function，不需要任何 API Key 即可跑完整的 6 步 ReAct 迴圈（含 reflect）驗證。
 
 ---
 
@@ -269,6 +277,7 @@ npm run test        # 跑模擬測試（不需 API Key）
 | `choose.md` | `{{skill}}`, `{{level}}` |
 | `attach-4a.md` | — |
 | `attach-4b.md` | — |
+| `reflect.md` | — |
 
 ---
 
