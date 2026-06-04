@@ -8,29 +8,86 @@
 
 採 **Generate-then-Retrieve** 架構，核心框架為 **ReAct（Reasoning and Acting）**。
 
-```
-使用者輸入技能
-      │
-  [Step 1] 程度評估       ← Ollama
-      │  Obs1: 程度不明確 → 追問（≤2 次）
-  [Step 2] 講義生成       ← Gemini
-      │  Obs2: 方向未選 → 重提示
-  [Step 3] 課程方向選擇   ← Ollama
-  [Step 4] 影片掛載       ← Gemini + YouTube API
-      │  4a: 生成搜尋詞
-      │  4b: 判斷相關性（Obs3: 不合適 → 重搜，≤2 次）
-  [Step 5] 整合輸出
-      │
-  學習藍圖（講義 + 影片時間戳）
+### 主流程圖
+
+```mermaid
+flowchart TD
+    Start([使用者輸入技能]) --> S1
+
+    subgraph S1["Step 1　程度評估　Ollama"]
+        A1[詢問學習背景] --> A2[LLM 判斷程度]
+        A2 --> OBS1{Obs1\nneedMoreProbing?}
+        OBS1 -- "是，retries < 2" --> A1
+        OBS1 -- "是，retries ≥ 2" --> A3[降級 level = none]
+        OBS1 -- 否 --> A4[level 確定]
+    end
+
+    A3 & A4 --> S2
+
+    subgraph S2["Step 2　講義生成　Gemini"]
+        B1[依 skill / level / preference\n生成 4–6 章講義]
+    end
+
+    S2 --> S3
+
+    subgraph S3["Step 3　方向選擇　Ollama"]
+        C1[詢問學習風格] --> C2[LLM 解析偏好]
+        C2 --> OBS2{Obs2\npreference 明確?}
+        OBS2 -- 否 --> C1
+        OBS2 -- 是 --> C3[preference 確定]
+    end
+
+    C3 --> S4
+
+    subgraph S4["Step 4　影片掛載　Gemini + YouTube API"]
+        D0{還有未處理章節?}
+        D0 -- 是 --> D1
+        D1["4a　LLM 生成搜尋詞\n[search query]"] --> D2{candidateCache\n命中?}
+        D2 -- 是 --> D4
+        D2 -- 否 --> D3[YouTube Search API]
+        D3 --> D4["4b　LLM 判斷相關性\n[adequate?]"]
+        D4 --> OBS3{Obs3\nadequate?}
+        OBS3 -- "否，retries < 2" --> D5[清除 cache\n重搜]
+        D5 --> D1
+        OBS3 -- "否，retries ≥ 2" --> D6[degraded 標記]
+        OBS3 -- 是 --> D7[寫入 videoMap]
+        D6 & D7 --> D0
+        D0 -- 全部完成 --> S5
+    end
+
+    subgraph S5["Step 5　整合輸出"]
+        E1[合併 lecture + videoMap\n標註 degraded 章節]
+    end
+
+    S5 --> End([學習藍圖\n講義 + 影片時間戳])
 ```
 
 ### 三層架構
 
-| 層 | 職責 |
-|----|------|
-| Agent 核心 | ReAct `while` 迴圈，唯一協調者，不直接碰網路 |
-| Provider 抽象層 | 統一 Ollama / Gemini 介面，容錯 JSON parser |
-| Tool 層 | YouTube Search（打 API）、Metadata Parser（純字串） |
+```mermaid
+flowchart LR
+    subgraph L1["第一層　Agent 核心"]
+        Core["while loop + switch\n依 currentStep 決策\n唯一協調者，不碰網路"]
+    end
+
+    subgraph L2["第二層　Provider 抽象層"]
+        Factory["ProviderFactory\nstep → model 派工表"]
+        Ollama["OllamaProvider\n/v1/chat/completions"]
+        Gemini["GeminiProvider\ngenerateContent"]
+        Parser["容錯 JSON Parser\n剝 markdown fence"]
+        Factory --> Ollama & Gemini
+        Ollama & Gemini --> Parser
+    end
+
+    subgraph L3["第三層　Tool 層"]
+        YT["YouTube Search\nData API v3\n100 units/次"]
+        Meta["Metadata Parser\n解析 description\n章節時間戳\n純字串，無網路"]
+    end
+
+    Core -- "forStep(step)" --> Factory
+    Core -- "searchYouTube()" --> YT
+    Core -- "parseTimestamps()" --> Meta
+```
 
 ---
 
