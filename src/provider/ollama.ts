@@ -2,12 +2,12 @@ import { LLMMessage, LLMProvider, LLMResponse } from "../types";
 import { parseModelOutput } from "./parseResponse";
 
 export class OllamaProvider implements LLMProvider {
+  readonly modelName: string;
   private baseUrl: string;
-  private model: string;
 
   constructor(baseUrl = "http://localhost:11434", model = "llama3") {
     this.baseUrl = baseUrl;
-    this.model = model;
+    this.modelName = model;
   }
 
   async chat(messages: LLMMessage[]): Promise<LLMResponse> {
@@ -15,7 +15,7 @@ export class OllamaProvider implements LLMProvider {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: this.model,
+        model: this.modelName,
         messages,
         stream: false,
       }),

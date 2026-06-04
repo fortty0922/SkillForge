@@ -65,7 +65,7 @@ export class AgentLoop {
   async run(): Promise<AgentState> {
     while (this.state.planning.currentStep !== "done") {
       const step = this.state.planning.currentStep;
-      this.io.output(`[step: ${step}]`);
+      this.io.output(`[step: ${step}] [model: ${this.factory.modelLabel(step)}]`);
 
       switch (step) {
         case "assess":    await this.stepAssess();    break;

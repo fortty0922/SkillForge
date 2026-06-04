@@ -35,11 +35,21 @@ export class ProviderFactory {
     const name: ModelName = this.policy[step];
     if (name === "gemini") {
       if (!this.gemini) {
-        // Fallback to Ollama when Gemini key is absent
         return this.ollama;
       }
       return this.gemini;
     }
     return this.ollama;
+  }
+
+  modelLabel(step: Step): string {
+    const name: ModelName = this.policy[step];
+    if (name === "gemini") {
+      if (!this.gemini) {
+        return `ollama/${this.ollama.modelName} (gemini fallback)`;
+      }
+      return `gemini/${this.gemini.modelName}`;
+    }
+    return `ollama/${this.ollama.modelName}`;
   }
 }

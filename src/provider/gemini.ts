@@ -28,12 +28,12 @@ function toGeminiMessages(messages: LLMMessage[]): {
 }
 
 export class GeminiProvider implements LLMProvider {
+  readonly modelName: string;
   private apiKey: string;
-  private model: string;
 
   constructor(apiKey: string, model = "gemini-1.5-flash") {
     this.apiKey = apiKey;
-    this.model = model;
+    this.modelName = model;
   }
 
   async chat(messages: LLMMessage[]): Promise<LLMResponse> {
@@ -46,7 +46,7 @@ export class GeminiProvider implements LLMProvider {
 
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/` +
-      `${this.model}:generateContent?key=${this.apiKey}`;
+      `${this.modelName}:generateContent?key=${this.apiKey}`;
 
     const res = await fetch(url, {
       method: "POST",
