@@ -113,9 +113,9 @@ export interface Attach4aResponse {
 }
 
 export interface Attach4bResponse {
-  chosen: string;    // candidate title chosen
+  chosenIndex: number; // 0-based index into candidates list
   videoId: string;
   startTime: number;
   endTime: number;
-  adequate: boolean; // Obs3 signal — false triggers retry
+  adequate: boolean;   // Obs3 signal — false triggers retry
 }

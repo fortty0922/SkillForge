@@ -175,6 +175,7 @@ export class AgentLoop {
   private async stepAttach(): Promise<void> {
     const s = this.state;
     const chapters = s.content.lecture;
+    const ragFailed = new Set<string>(); // chapters whose RAG results were judged inadequate
 
     while (s.planning.attachCursor < chapters.length) {
       const chapter = chapters[s.planning.attachCursor];
@@ -195,8 +196,8 @@ export class AgentLoop {
       let candidates = s.content.candidateCache[query];
 
       if (!candidates) {
-        // 1. Try local RAG store
-        const local = searchLocal(query, this.ragStore);
+        // 1. Try local RAG store (skip if RAG already failed for this chapter)
+        const local = ragFailed.has(chapterId) ? [] : searchLocal(query, this.ragStore);
         if (local.length > 0) {
           this.io.output(`  [rag] ${local.length} local result(s)`);
           candidates = local;
@@ -225,13 +226,9 @@ export class AgentLoop {
         continue;
       }
 
-      // Parse timestamps from top candidate's description
-      const topCandidate = candidates[0];
-      const timestamps = parseTimestamps(topCandidate.description);
-
-      // 4b: judge relevance and pick best segment
+      // 4b: judge relevance — pass candidates first, timestamps derived after pick
       const judgeResponse = await provider.chat(
-        buildAttach4bMessages(chapter.title, candidates, timestamps)
+        buildAttach4bMessages(chapter.title, candidates, parseTimestamps(candidates[0].description))
       );
       const judgePayload = safeParseJson<Attach4bResponse>(judgeResponse.text ?? "");
 
@@ -240,19 +237,28 @@ export class AgentLoop {
         const retries = s.control.searchRetries[chapterId] ?? 0;
         if (retries < MAX_SEARCH_RETRIES) {
           s.control.searchRetries[chapterId] = retries + 1;
-          delete s.content.candidateCache[query]; // force re-search
-          continue; // retry same chapter
+          ragFailed.add(chapterId);             // next retry skips RAG
+          delete s.content.candidateCache[query];
+          continue;
         }
         this.handleAttachDegrade(chapterId);
         s.planning.attachCursor += 1;
         continue;
       }
 
+      // Use chosenIndex to get real title and timestamps (Fix 1+2+5)
+      const chosenIndex = Math.max(
+        0, Math.min(judgePayload.chosenIndex ?? 0, candidates.length - 1)
+      );
+      const chosenCandidate = candidates[chosenIndex];
+      const chosenTimestamps = parseTimestamps(chosenCandidate.description);
+      const ts = chosenTimestamps[0];
+
       const attachment: VideoAttachment = {
-        videoId:   judgePayload.videoId,
-        title:     judgePayload.chosen,
-        startTime: judgePayload.startTime,
-        endTime:   judgePayload.endTime,
+        videoId:   judgePayload.videoId || chosenCandidate.videoId,
+        title:     chosenCandidate.title,
+        startTime: ts?.startTime ?? judgePayload.startTime,
+        endTime:   ts?.endTime   ?? judgePayload.endTime,
       };
       s.content.videoMap[chapterId] = attachment;
       s.planning.attachCursor += 1;

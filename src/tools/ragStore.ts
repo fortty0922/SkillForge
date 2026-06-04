@@ -66,13 +66,15 @@ export function searchLocal(
 
   if (words.length === 0) return [];
 
+  const minScore = Math.max(1, Math.ceil(words.length / 2));
+
   const scored = store.entries
     .map((entry) => {
       const haystack = `${entry.title} ${entry.description}`.toLowerCase();
       const score = words.filter((w) => haystack.includes(w)).length;
       return { entry, score };
     })
-    .filter(({ score }) => score >= 1)
+    .filter(({ score }) => score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 
