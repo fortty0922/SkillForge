@@ -177,6 +177,7 @@ export class AgentLoop {
       );
       const queryPayload = safeParseJson<Attach4aResponse>(queryResponse.text ?? "");
       const query = queryPayload?.query ?? `${s.profile.skill} ${chapter.title} tutorial`;
+      this.io.output(`  [4a query] "${query}"`);
 
       // Check candidate cache
       let candidates = s.content.candidateCache[query];
@@ -185,10 +186,13 @@ export class AgentLoop {
         try {
           candidates = await this.searchFn(query, this.youtubeApiKey);
           s.content.candidateCache[query] = candidates;
-        } catch {
+        } catch (err) {
+          this.io.output(`  [search error] ${(err as Error).message}`);
           candidates = [];
         }
       }
+
+      this.io.output(`  [search] ${candidates.length} result(s)`);
 
       if (candidates.length === 0) {
         this.handleAttachDegrade(chapterId);

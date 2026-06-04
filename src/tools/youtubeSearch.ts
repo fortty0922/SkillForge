@@ -20,6 +20,10 @@ export async function searchYouTube(
   apiKey: string,
   maxResults = 5
 ): Promise<VideoCandidate[]> {
+  if (!apiKey) {
+    throw new Error("YouTube API key is missing. Set YOUTUBE_API_KEY in .env");
+  }
+
   const params = new URLSearchParams({
     part: "snippet",
     q: query,
@@ -41,10 +45,12 @@ export async function searchYouTube(
 
   const data = (await res.json()) as YouTubeSearchResponse;
 
-  return (data.items ?? []).map((item) => ({
-    videoId: item.id.videoId,
-    title: item.snippet.title,
-    description: item.snippet.description,
-    channelTitle: item.snippet.channelTitle,
-  }));
+  return (data.items ?? [])
+    .filter((item) => !!item.id?.videoId)
+    .map((item) => ({
+      videoId: item.id.videoId,
+      title: item.snippet.title,
+      description: item.snippet.description,
+      channelTitle: item.snippet.channelTitle,
+    }));
 }
