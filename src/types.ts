@@ -1,7 +1,7 @@
 // ── Core enumerations ──────────────────────────────────────────────
 
 export type Level = "none" | "some" | "advanced" | null;
-export type Step = "assess" | "generate" | "choose" | "attach" | "synthesize" | "done";
+export type Step = "assess" | "generate" | "choose" | "attach" | "synthesize" | "reflect" | "done";
 export type Preference = "concept-first" | "practice-first" | null;
 
 // ── Content structures ─────────────────────────────────────────────
@@ -45,6 +45,7 @@ export interface AgentState {
     currentStep: Step;
     directionChosen: boolean;
     attachCursor: number; // index into lecture array
+    reflectFeedback: string; // feedback from reflect step injected into next generate
   };
   content: {
     lecture: Chapter[];
@@ -55,6 +56,7 @@ export interface AgentState {
     assessRetries: number;
     searchRetries: Record<string, number>; // key = chapter id
     degraded: string[];                    // chapter ids that fell back
+    reflectRetries: number;
   };
 }
 
@@ -110,6 +112,13 @@ export interface ChooseResponse {
 
 export interface Attach4aResponse {
   query: string;  // search query for YouTube
+}
+
+export interface ReflectResponse {
+  approved: boolean;
+  issues: string[];                      // human-readable issue list
+  action: "approve" | "regenerate";
+  feedback: string;                      // injected into next generate if regenerating
 }
 
 export interface Attach4bResponse {

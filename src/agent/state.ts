@@ -12,6 +12,7 @@ export function createInitialState(skill: string): AgentState {
       currentStep: "assess",
       directionChosen: false,
       attachCursor: 0,
+      reflectFeedback: "",
     },
     content: {
       lecture: [],
@@ -22,6 +23,7 @@ export function createInitialState(skill: string): AgentState {
       assessRetries: 0,
       searchRetries: {},
       degraded: [],
+      reflectRetries: 0,
     },
   };
 }

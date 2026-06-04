@@ -8,6 +8,7 @@ export const DEFAULT_POLICY: StepModelPolicy = {
   choose:    "ollama",
   attach:    "gemini",
   synthesize:"gemini",
+  reflect:   "gemini",
   done:      "ollama",
 };
 

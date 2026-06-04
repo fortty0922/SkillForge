@@ -8,6 +8,7 @@ import {
   ChooseResponse,
   Attach4aResponse,
   Attach4bResponse,
+  ReflectResponse,
 } from "../types";
 import { ProviderFactory } from "../provider/factory";
 import { searchYouTube } from "../tools/youtubeSearch";
@@ -27,6 +28,7 @@ import {
   buildChooseMessages,
   buildAttach4aMessages,
   buildAttach4bMessages,
+  buildReflectMessages,
 } from "./prompts";
 
 const MAX_ASSESS_RETRIES = 2;
@@ -76,6 +78,7 @@ export class AgentLoop {
         case "choose":    await this.stepChoose();    break;
         case "attach":    await this.stepAttach();    break;
         case "synthesize":await this.stepSynthesize();break;
+        case "reflect":   await this.stepReflect();   break;
       }
     }
     return this.state;
@@ -316,7 +319,45 @@ export class AgentLoop {
     }
 
     this.io.output(lines.join("\n"));
-    s.planning.currentStep = "done";
+    s.planning.currentStep = "reflect";
+  }
+
+  // ── Step 6: reflect ───────────────────────────────────────────────
+
+  private async stepReflect(): Promise<void> {
+    const s = this.state;
+    const provider = this.factory.forStep("reflect");
+    const response = await provider.chat(buildReflectMessages(s));
+    const payload = safeParseJson<ReflectResponse>(response.text ?? "");
+
+    if (!payload) {
+      // Parse failure → approve and continue
+      s.planning.currentStep = "done";
+      return;
+    }
+
+    if (payload.feedback) this.io.output(`[reflect] ${payload.feedback}`);
+    if (payload.issues.length > 0) {
+      this.io.output(payload.issues.map((i) => `  • ${i}`).join("\n"));
+    }
+
+    if (
+      payload.action === "regenerate" &&
+      s.control.reflectRetries < 1
+    ) {
+      s.control.reflectRetries += 1;
+      s.planning.reflectFeedback = payload.feedback;
+      // Reset content while keeping profile
+      s.content.lecture = [];
+      s.content.videoMap = {};
+      s.control.degraded = [];
+      s.control.searchRetries = {};
+      s.planning.attachCursor = 0;
+      s.planning.directionChosen = false;
+      s.planning.currentStep = "generate";
+    } else {
+      s.planning.currentStep = "done";
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────

@@ -60,6 +60,17 @@ class MockProvider implements LLMProvider {
       };
     }
 
+    if (system.includes("quality evaluator")) {
+      return {
+        text: JSON.stringify({
+          approved: true,
+          issues: [],
+          action: "approve",
+          feedback: "Blueprint looks good.",
+        }),
+      };
+    }
+
     return { text: JSON.stringify({ text: "ok" }) };
   }
 }
@@ -105,7 +116,7 @@ async function mockSearch() {
 
 (async () => {
   const state = createInitialState("TypeScript");
-  const loop = new AgentLoop(state, new MockFactory(), mockIO, "", mockSearch);
+  const loop = new AgentLoop(state, new MockFactory(), mockIO, "", mockSearch, "");
 
   const finalState = await loop.run();
 

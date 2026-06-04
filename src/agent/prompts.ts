@@ -58,6 +58,9 @@ export function buildAssessMessages(
 
 export function buildGenerateMessages(state: AgentState): LLMMessage[] {
   const { skill, level, masteredConcepts, preference } = state.profile;
+  const feedback = state.planning.reflectFeedback
+    ? ` Previous attempt was rejected — improve as follows: ${state.planning.reflectFeedback}`
+    : "";
 
   return [
     system(render(loadPrompt("generate"), {
@@ -68,7 +71,41 @@ export function buildGenerateMessages(state: AgentState): LLMMessage[] {
         : "",
       learningStyle: preference ? ` Learning style: ${preference}.` : "",
     })),
-    { role: "user", content: "Generate the lecture now." },
+    { role: "user", content: `Generate the lecture now.${feedback}` },
+  ];
+}
+
+export function buildReflectMessages(state: AgentState): LLMMessage[] {
+  const { skill, level, preference } = state.profile;
+  const { lecture, videoMap } = state.content;
+  const { degraded } = state.control;
+
+  const validTimestamps = lecture.filter((ch) => {
+    const v = videoMap[ch.id];
+    return v && (v.startTime > 0 || v.endTime > 0);
+  }).length;
+
+  const outline = lecture
+    .map((ch) => {
+      const v = videoMap[ch.id];
+      const videoStatus = degraded.includes(ch.id)
+        ? "NO VIDEO"
+        : v
+        ? `video attached (${v.startTime}s–${v.endTime}s)`
+        : "NO VIDEO";
+      return `- ${ch.title} [${videoStatus}]\n  ${ch.body.slice(0, 120)}...`;
+    })
+    .join("\n");
+
+  return [
+    system(loadPrompt("reflect")),
+    {
+      role: "user",
+      content:
+        `Skill: "${skill}" | Level: "${level}" | Style: "${preference ?? "default"}"\n` +
+        `Chapters: ${lecture.length} | Degraded: ${degraded.length} | Valid timestamps: ${validTimestamps}\n\n` +
+        `Blueprint:\n${outline}`,
+    },
   ];
 }
 
