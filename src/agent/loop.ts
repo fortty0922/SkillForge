@@ -107,6 +107,9 @@ export class AgentLoop {
       return;
     }
 
+    const thought = (payload as unknown as Record<string, unknown>).thought as string | undefined;
+    if (thought) this.io.output(`  💭 ${thought}`);
+
     // Append this turn to history so next round has full context
     this.assessHistory.push(
       { role: "user",      content: userInput },
@@ -193,11 +196,34 @@ export class AgentLoop {
 
   private async stepAttach(): Promise<void> {
     const s = this.state;
-    const chapters = s.content.lecture;
-    const ragFailed = new Set<string>(); // chapters whose RAG results were judged inadequate
+    const ragFailed = new Set<string>();
 
-    while (s.planning.attachCursor < chapters.length) {
-      const chapter = chapters[s.planning.attachCursor];
+    // Repair mode: only process chapters in repairQueue
+    const repairIds = new Set(
+      s.planning.repairQueue.filter((r) => r.type === "reattach").map((r) => r.id)
+    );
+    const isRepairMode = repairIds.size > 0;
+    const chapters = isRepairMode
+      ? s.content.lecture.filter((ch) => repairIds.has(ch.id))
+      : s.content.lecture;
+    let repairCursor = 0;
+
+    const getNextChapter = () => {
+      if (isRepairMode) {
+        return repairCursor < chapters.length ? chapters[repairCursor] : null;
+      }
+      return s.planning.attachCursor < s.content.lecture.length
+        ? s.content.lecture[s.planning.attachCursor]
+        : null;
+    };
+
+    const advanceCursor = () => {
+      if (isRepairMode) repairCursor += 1;
+      else s.planning.attachCursor += 1;
+    };
+
+    while (getNextChapter() !== null) {
+      const chapter = getNextChapter()!;
       const chapterId = chapter.id;
 
       this.io.output(`  attaching video for: "${chapter.title}"`);
@@ -241,7 +267,7 @@ export class AgentLoop {
 
       if (candidates.length === 0) {
         this.handleAttachDegrade(chapterId);
-        s.planning.attachCursor += 1;
+        advanceCursor();
         continue;
       }
 
@@ -261,11 +287,11 @@ export class AgentLoop {
           continue;
         }
         this.handleAttachDegrade(chapterId);
-        s.planning.attachCursor += 1;
+        advanceCursor();
         continue;
       }
 
-      // Use chosenIndex to get real title and timestamps (Fix 1+2+5)
+      // Use chosenIndex to get real title and timestamps
       const chosenIndex = Math.max(
         0, Math.min(judgePayload.chosenIndex ?? 0, candidates.length - 1)
       );
@@ -280,9 +306,11 @@ export class AgentLoop {
         endTime:   ts?.endTime   ?? judgePayload.endTime,
       };
       s.content.videoMap[chapterId] = attachment;
-      s.planning.attachCursor += 1;
+      advanceCursor();
     }
 
+    // Clear repair queue after processing
+    s.planning.repairQueue = [];
     s.planning.currentStep = "synthesize";
   }
 
@@ -336,18 +364,35 @@ export class AgentLoop {
       return;
     }
 
+    const thought = (payload as unknown as Record<string, unknown>).thought as string | undefined;
+    if (thought) this.io.output(`  💭 ${thought}`);
     if (payload.feedback) this.io.output(`[reflect] ${payload.feedback}`);
     if (payload.issues.length > 0) {
       this.io.output(payload.issues.map((i) => `  • ${i}`).join("\n"));
     }
 
-    if (
-      payload.action === "regenerate" &&
-      s.control.reflectRetries < 1
-    ) {
+    if (payload.action === "repair" && s.control.reflectRetries < 1) {
+      // Targeted repair: only fix specific chapters
+      s.control.reflectRetries += 1;
+      s.planning.repairQueue = payload.chaptersToFix ?? [];
+      s.planning.reflectFeedback = payload.feedback;
+
+      for (const fix of s.planning.repairQueue) {
+        if (fix.type === "reattach") {
+          delete s.content.videoMap[fix.id];
+          s.control.degraded = s.control.degraded.filter((id) => id !== fix.id);
+          s.control.searchRetries[fix.id] = 0;
+        }
+      }
+
+      const hasRewrites = s.planning.repairQueue.some((r) => r.type === "rewrite");
+      s.planning.currentStep = hasRewrites ? "generate" : "attach";
+
+    } else if (payload.action === "regenerate" && s.control.reflectRetries < 1) {
+      // Full regeneration as last resort
       s.control.reflectRetries += 1;
       s.planning.reflectFeedback = payload.feedback;
-      // Reset content while keeping profile
+      s.planning.repairQueue = [];
       s.content.lecture = [];
       s.content.videoMap = {};
       s.control.degraded = [];
@@ -355,7 +400,9 @@ export class AgentLoop {
       s.planning.attachCursor = 0;
       s.planning.directionChosen = false;
       s.planning.currentStep = "generate";
+
     } else {
+      s.planning.repairQueue = [];
       s.planning.currentStep = "done";
     }
   }

@@ -8,17 +8,20 @@ Evaluate these three dimensions:
    - "some": content can skip basics but should not assume advanced knowledge
    - "advanced": content can go deep into internals and edge cases
 
-2. VIDEO COVERAGE — What proportion of chapters have valid video attachments?
-   - If more than 50% of chapters are degraded (no video found), flag this.
-   - If attached videos have startTime=0 AND endTime=0, the timestamp is invalid.
+2. VIDEO COVERAGE — Which specific chapters have no video or invalid timestamps (startTime=endTime=0)?
+   Flag each problematic chapter by ID.
 
 3. LEARNING PATH — Do chapters build progressively on each other?
-   - Flag if chapters seem disconnected or out of logical order.
+   Flag disconnected or out-of-order chapters by ID.
 
-Decision rules:
-- Set approved=true and action="approve" if no critical issues found.
-- Set approved=false and action="regenerate" only if depth is seriously wrong OR >50% chapters degraded.
-- In feedback, provide ONE concrete instruction for the next generation attempt (e.g. "simplify vocabulary", "add prerequisite chapter on X").
-- Do NOT regenerate for minor issues — prefer approving with notes in issues[].
+Decision rules (choose the LEAST disruptive action):
+- "approve": no critical issues — proceed to done.
+- "repair": some chapters have specific fixable problems (degraded video, bad timestamp, depth issue in 1-2 chapters).
+  → Populate chaptersToFix with ONLY the affected chapter IDs and type:
+    - type="reattach": video is missing or timestamp invalid — will retry video search
+    - type="rewrite":  chapter depth is wrong — will regenerate only that chapter's body
+  → Use repair instead of regenerate whenever possible.
+- "regenerate": fundamental structural problems (>50% chapters degraded AND depth is wrong, OR entire learning path is incoherent).
+  → Only use as last resort.
 
-Schema: { "approved": boolean, "issues": string[], "action": "approve"|"regenerate", "feedback": string }
+Schema: { "thought": string, "approved": boolean, "issues": string[], "action": "approve"|"repair"|"regenerate", "chaptersToFix": [{"id": string, "type": "reattach"|"rewrite", "reason": string}], "feedback": string }

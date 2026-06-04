@@ -13,6 +13,7 @@ export function createInitialState(skill: string): AgentState {
       directionChosen: false,
       attachCursor: 0,
       reflectFeedback: "",
+      repairQueue: [],
     },
     content: {
       lecture: [],

@@ -5,6 +5,7 @@ import {
   LLMMessage,
   VideoCandidate,
   TimestampEntry,
+  ChapterRepair,
 } from "../types";
 
 // ── File loader (cache after first read) ──────────────────────────
@@ -62,6 +63,14 @@ export function buildGenerateMessages(state: AgentState): LLMMessage[] {
     ? ` Previous attempt was rejected — improve as follows: ${state.planning.reflectFeedback}`
     : "";
 
+  const rewrites = state.planning.repairQueue.filter((r) => r.type === "rewrite");
+  const rewriteInstruction =
+    rewrites.length > 0
+      ? ` IMPORTANT: Only rewrite these specific chapters (keep all others unchanged): ${rewrites
+          .map((r) => `${r.id} (reason: ${r.reason})`)
+          .join(", ")}.`
+      : "";
+
   return [
     system(render(loadPrompt("generate"), {
       skill,
@@ -71,7 +80,7 @@ export function buildGenerateMessages(state: AgentState): LLMMessage[] {
         : "",
       learningStyle: preference ? ` Learning style: ${preference}.` : "",
     })),
-    { role: "user", content: `Generate the lecture now.${feedback}` },
+    { role: "user", content: `Generate the lecture now.${feedback}${rewriteInstruction}` },
   ];
 }
 

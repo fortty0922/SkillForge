@@ -63,9 +63,11 @@ class MockProvider implements LLMProvider {
     if (system.includes("quality evaluator")) {
       return {
         text: JSON.stringify({
+          thought: "Depth matches level, coverage acceptable.",
           approved: true,
           issues: [],
           action: "approve",
+          chaptersToFix: [],
           feedback: "Blueprint looks good.",
         }),
       };

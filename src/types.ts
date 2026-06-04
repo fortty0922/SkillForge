@@ -44,8 +44,9 @@ export interface AgentState {
   planning: {
     currentStep: Step;
     directionChosen: boolean;
-    attachCursor: number; // index into lecture array
-    reflectFeedback: string; // feedback from reflect step injected into next generate
+    attachCursor: number;        // index into lecture array (full attach mode)
+    reflectFeedback: string;     // feedback injected into next generate
+    repairQueue: ChapterRepair[]; // chapters to selectively fix (repair mode)
   };
   content: {
     lecture: Chapter[];
@@ -114,11 +115,18 @@ export interface Attach4aResponse {
   query: string;  // search query for YouTube
 }
 
+export interface ChapterRepair {
+  id: string;
+  type: "reattach" | "rewrite";
+  reason: string;
+}
+
 export interface ReflectResponse {
   approved: boolean;
-  issues: string[];                      // human-readable issue list
-  action: "approve" | "regenerate";
-  feedback: string;                      // injected into next generate if regenerating
+  issues: string[];
+  action: "approve" | "regenerate" | "repair";
+  chaptersToFix: ChapterRepair[];        // populated when action="repair"
+  feedback: string;
 }
 
 export interface Attach4bResponse {
