@@ -40,10 +40,13 @@ flowchart TD
     S5 --> S6
 
     S6(["Step 6　品質評估\nGemini"])
-    S6 --> O6{approved?}
-    O6 -- "否，retries ＜ 1" --> D6["注入 feedback\n重置內容"]
+    S6 --> O6{action?}
+    O6 -- approve --> End([fa:fa-book 學習藍圖])
+    O6 -- "repair\nretries ＜ 1" --> D6r["指定章節\n修復佇列"]
+    D6r -- "type=reattach" --> S4
+    D6r -- "type=rewrite" --> S2
+    O6 -- "regenerate\nretries ＜ 1" --> D6["注入 feedback\n全部重置"]
     D6 --> S2
-    O6 -- 是 --> End([fa:fa-book 學習藍圖])
 
     classDef step fill:#4A90D9,stroke:#2C6FAC,color:#fff,rx:8
     classDef obs  fill:#F5A623,stroke:#C47D0E,color:#fff
@@ -51,7 +54,7 @@ flowchart TD
     classDef io fill:#27AE60,stroke:#1E8449,color:#fff
     class S1,S2,S3,S4,S5,S6 step
     class O1,O2,O3,O6 obs
-    class D1,D3,D6 degrade
+    class D1,D3,D6,D6r degrade
     class Start,End io
 ```
 
@@ -243,9 +246,11 @@ Lecture is ready! Do you prefer concept-first or practice-first?
 ...
 
 [step: reflect]   [model: gemini/gemini-1.5-flash]
+  💭 Depth matches level, all chapters have valid videos.
 [reflect] Blueprint looks good for a "some" level learner.
-                                   ← approved → done
-                                   ← 或 regenerate → 退回 generate 重做
+                      ← action="approve"    → done
+                      ← action="repair"     → 只重跑指定章節
+                      ← action="regenerate" → 退回 generate 全部重做
 ```
 
 ---
@@ -260,7 +265,13 @@ npm run test        # 跑模擬測試（不需 API Key）
 
 ### 模擬測試
 
-`src/test/agentLoop.test.ts` 使用 Mock Provider 和 Mock Search Function，不需要任何 API Key 即可跑完整的 6 步 ReAct 迴圈（含 reflect）驗證。
+`src/test/agentLoop.test.ts` 使用 `StatefulMockProvider`（支援依呼叫次數回傳不同值），涵蓋三條路徑：
+
+| Case | 路徑 | 驗證重點 |
+|------|------|---------|
+| A | Happy path | `videoMap` 完整、`attachCursor`、`directionChosen` |
+| B | Obs3 retry + degrade | `degraded[]` 非空、`searchRetries` 計數 |
+| C | reflect repair → reattach | `reflectRetries=1`、`repairQueue` 清空 |
 
 ---
 
