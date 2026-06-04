@@ -8,92 +8,114 @@
 
 採 **Generate-then-Retrieve** 架構，核心框架為 **ReAct（Reasoning and Acting）**。
 
-### 主流程圖
+### ReAct 主流程
 
 ```mermaid
 flowchart TD
-    Start([使用者輸入技能]) --> S1
+    Start([fa:fa-user 輸入技能]) --> S1
 
-    subgraph S1["Step 1　程度評估　Ollama"]
-        A1[詢問學習背景] --> A2[LLM 判斷程度]
-        A2 --> OBS1{Obs1\nneedMoreProbing?}
-        OBS1 -- "是，retries < 2" --> A1
-        OBS1 -- "是，retries ≥ 2" --> A3[降級 level = none]
-        OBS1 -- 否 --> A4[level 確定]
-    end
+    S1(["Step 1　程度評估\nOllama"])
+    S1 --> O1{Obs 1\nneedMoreProbing?}
+    O1 -- "是，retries ＜ 2" --> S1
+    O1 -- "retries ≥ 2" --> D1["⚠ 降級 level = none"]
+    O1 -- 否 --> S2
+    D1 --> S2
 
-    A3 & A4 --> S2
-
-    subgraph S2["Step 2　講義生成　Gemini"]
-        B1[依 skill / level / preference\n生成 4–6 章講義]
-    end
-
+    S2(["Step 2　講義生成\nGemini"])
     S2 --> S3
 
-    subgraph S3["Step 3　方向選擇　Ollama"]
-        C1[詢問學習風格] --> C2[LLM 解析偏好]
-        C2 --> OBS2{Obs2\npreference 明確?}
-        OBS2 -- 否 --> C1
-        OBS2 -- 是 --> C3[preference 確定]
-    end
+    S3(["Step 3　方向選擇\nOllama"])
+    S3 --> O2{Obs 2\npreference 明確?}
+    O2 -- 否 --> S3
+    O2 -- 是 --> S4
 
-    C3 --> S4
+    S4(["Step 4　影片掛載\nGemini + YouTube"])
+    S4 --> O3{Obs 3\nadequate?}
+    O3 -- "否，retries ＜ 2" --> S4
+    O3 -- "retries ≥ 2" --> D3["⚠ degraded 標記"]
+    O3 -- 是 --> S5
+    D3 --> S5
 
-    subgraph S4["Step 4　影片掛載　Gemini + YouTube API"]
-        D0{還有未處理章節?}
-        D0 -- 是 --> D1
-        D1["4a　LLM 生成搜尋詞\n[search query]"] --> D2{session\ncandidateCache?}
-        D2 -- 命中 --> D4b
-        D2 -- 未命中 --> D3{local RAG\nstore 命中?}
-        D3 -- "是 → [rag]" --> D4b
-        D3 -- "否 → [search]" --> DYT[YouTube Search API]
-        DYT --> DSAVE[持久化至\ndata/candidates.json]
-        DSAVE --> D4b
-        D4b["4b　LLM 判斷相關性\n[adequate?]"]
-        D4b --> OBS3{Obs3\nadequate?}
-        OBS3 -- "否，retries < 2" --> D5[清除 cache\n重搜]
-        D5 --> D1
-        OBS3 -- "否，retries ≥ 2" --> D6[degraded 標記]
-        OBS3 -- 是 --> D7[寫入 videoMap]
-        D6 & D7 --> D0
-        D0 -- 全部完成 --> S5
-    end
+    S5(["Step 5　整合輸出"])
+    S5 --> End([fa:fa-book 學習藍圖])
 
-    subgraph S5["Step 5　整合輸出"]
-        E1[合併 lecture + videoMap\n標註 degraded 章節]
-    end
+    classDef step fill:#4A90D9,stroke:#2C6FAC,color:#fff,rx:8
+    classDef obs  fill:#F5A623,stroke:#C47D0E,color:#fff
+    classDef degrade fill:#E74C3C,stroke:#C0392B,color:#fff
+    classDef io fill:#27AE60,stroke:#1E8449,color:#fff
+    class S1,S2,S3,S4,S5 step
+    class O1,O2,O3 obs
+    class D1,D3 degrade
+    class Start,End io
+```
 
-    S5 --> End([學習藍圖\n講義 + 影片時間戳])
+### Step 4 影片掛載細節
+
+```mermaid
+flowchart TD
+    In([下一章節]) --> A
+
+    A["4a　LLM 生成搜尋詞"]
+    A --> C1{Session\nCache?}
+
+    C1 -- 命中 --> Judge
+    C1 -- 未命中 --> C2{Local\nRAG Store?}
+
+    C2 -- "命中 → rag" --> Judge
+    C2 -- 未命中 --> YT["YouTube Data API v3"]
+    YT --> Save["寫入 candidates.json"]
+    Save --> Judge
+
+    Judge["4b　LLM 判斷相關性"]
+    Judge --> Adeq{adequate?}
+
+    Adeq -- "否，retries ＜ 2" --> Clear["清除 cache"] --> A
+    Adeq -- "retries ≥ 2" --> Deg(["⚠ degraded"])
+    Adeq -- 是 --> VM(["✓ videoMap 更新"])
+
+    classDef step  fill:#4A90D9,stroke:#2C6FAC,color:#fff
+    classDef cache fill:#8E44AD,stroke:#6C3483,color:#fff
+    classDef ext   fill:#16A085,stroke:#0E6655,color:#fff
+    classDef ok    fill:#27AE60,stroke:#1E8449,color:#fff
+    classDef warn  fill:#E74C3C,stroke:#C0392B,color:#fff
+    class A,Judge step
+    class C1,C2,Adeq cache
+    class YT,Save ext
+    class VM,In ok
+    class Deg,Clear warn
 ```
 
 ### 三層架構
 
 ```mermaid
-flowchart LR
-    subgraph L1["第一層　Agent 核心"]
-        Core["while loop + switch\n依 currentStep 決策\n唯一協調者，不碰網路"]
+flowchart TD
+    subgraph Core["第一層　Agent 核心"]
+        Loop["AgentLoop\nwhile loop + switch\ncurrentStep 為唯一真相來源"]
     end
 
-    subgraph L2["第二層　Provider 抽象層"]
-        Factory["ProviderFactory\nstep → model 派工表"]
-        Ollama["OllamaProvider\n/v1/chat/completions"]
-        Gemini["GeminiProvider\ngenerateContent"]
-        Parser["容錯 JSON Parser\n剝 markdown fence"]
-        Factory --> Ollama & Gemini
-        Ollama & Gemini --> Parser
+    subgraph Provider["第二層　Provider 抽象層"]
+        Factory["ProviderFactory\nstep → model 派工"]
+        Ollama["Ollama\nllama3"]
+        Gemini["Gemini\ngemini-1.5-flash"]
+        Factory --> Ollama
+        Factory --> Gemini
     end
 
-    subgraph L3["第三層　Tool 層"]
-        YT["YouTube Search\nData API v3\n100 units/次"]
-        Meta["Metadata Parser\n解析 description\n章節時間戳\n純字串，無網路"]
-        RAG["RAG Store\ndata/candidates.json\n本地關鍵字檢索\n跨 session 持久化"]
+    subgraph Tools["第三層　Tool 層"]
+        YT["YouTube Search\nData API v3"]
+        Meta["Metadata Parser\n時間戳解析"]
+        RAG["RAG Store\ncandidates.json"]
+        YT --> RAG
     end
 
-    Core -- "forStep(step)" --> Factory
-    Core -- "searchLocal()" --> RAG
-    Core -- "searchYouTube()" --> YT
-    Core -- "parseTimestamps()" --> Meta
-    YT -- "addCandidates()" --> RAG
+    Loop -->|"forStep(step)"| Factory
+    Loop -->|"searchLocal()"| RAG
+    Loop -->|"searchYouTube()"| YT
+    Loop -->|"parseTimestamps()"| Meta
+
+    classDef layer fill:#2C3E50,stroke:#1A252F,color:#fff
+    classDef node  fill:#34495E,stroke:#2C3E50,color:#fff
+    class Loop,Factory,Ollama,Gemini,YT,Meta,RAG node
 ```
 
 ---
@@ -189,27 +211,27 @@ npm start "TypeScript"
 ### 執行流程範例
 
 ```
-[step: assess]
+[step: assess]    [model: ollama/llama3]
 Tell me about your experience with "TypeScript".
 > I know JavaScript but never used TypeScript
 
-[step: generate]
+[step: generate]  [model: gemini/gemini-1.5-flash]
 
-[step: choose]
+[step: choose]    [model: ollama/llama3]
 Lecture is ready! Do you prefer concept-first or practice-first?
 > practice-first
 
-[step: attach]
+[step: attach]    [model: gemini/gemini-1.5-flash]
   attaching video for: "Type Annotations"
   [4a query] "TypeScript Type Annotations tutorial"
-  [search] 5 result(s) from YouTube      ← 第一次：打 API 並存入本地庫
+  [search] 5 result(s) from YouTube      ← 第一次：打 API 並寫入本地庫
 
   attaching video for: "Interfaces"
   [4a query] "TypeScript Interfaces tutorial"
-  [rag] 3 local result(s)                ← 之後：直接從本地庫取，不耗配額
+  [rag] 3 local result(s)                ← 第二次起：本地庫命中，不耗配額
   ...
 
-[step: synthesize]
+[step: synthesize] [model: gemini/gemini-1.5-flash]
 # Learning Blueprint: TypeScript
 Level: some | Style: practice-first
 
