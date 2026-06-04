@@ -91,6 +91,7 @@ export type StepModelPolicy = Record<Step, ModelName>;
 // ── Step response contracts (align with State structure) ───────────
 
 export interface AssessResponse {
+  thought?: string;
   level: Level;
   masteredConcepts: string[];
   needMoreProbing: boolean;  // Obs1 signal
@@ -122,6 +123,7 @@ export interface ChapterRepair {
 }
 
 export interface ReflectResponse {
+  thought?: string;
   approved: boolean;
   issues: string[];
   action: "approve" | "regenerate" | "repair";

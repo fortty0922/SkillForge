@@ -107,7 +107,7 @@ export class AgentLoop {
       return;
     }
 
-    const thought = (payload as unknown as Record<string, unknown>).thought as string | undefined;
+    const thought = payload.thought;
     if (thought) this.io.output(`  💭 ${thought}`);
 
     // Append this turn to history so next round has full context
@@ -364,7 +364,7 @@ export class AgentLoop {
       return;
     }
 
-    const thought = (payload as unknown as Record<string, unknown>).thought as string | undefined;
+    const thought = payload.thought;
     if (thought) this.io.output(`  💭 ${thought}`);
     if (payload.feedback) this.io.output(`[reflect] ${payload.feedback}`);
     if (payload.issues.length > 0) {
