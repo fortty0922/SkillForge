@@ -1,5 +1,6 @@
 import {
   AgentState,
+  LLMMessage,
   Preference,
   VideoAttachment,
   VideoCandidate,
@@ -44,6 +45,8 @@ export class AgentLoop {
   private searchFn: SearchFn;
   private ragStore: RAGStore;
   private ragStorePath: string;
+  private assessHistory: LLMMessage[] = [];
+  private pendingAssessPrompt = "";
 
   constructor(
     state: AgentState,
@@ -82,12 +85,18 @@ export class AgentLoop {
 
   private async stepAssess(): Promise<void> {
     const s = this.state;
-    const userInput = await this.io.getUserInput(
-      `Tell me about your experience with "${s.profile.skill}".`
-    );
+
+    // Use LLM's follow-up question as prompt if available, else use default
+    const prompt = this.pendingAssessPrompt ||
+      `Tell me about your experience with "${s.profile.skill}".`;
+    this.pendingAssessPrompt = "";
+
+    const userInput = await this.io.getUserInput(prompt);
 
     const provider = this.factory.forStep("assess");
-    const response = await provider.chat(buildAssessMessages(s, userInput));
+    const response = await provider.chat(
+      buildAssessMessages(s, userInput, this.assessHistory)
+    );
     const payload = safeParseJson<AssessResponse>(response.text ?? "");
 
     if (!payload) {
@@ -95,8 +104,15 @@ export class AgentLoop {
       return;
     }
 
+    // Append this turn to history so next round has full context
+    this.assessHistory.push(
+      { role: "user",      content: userInput },
+      { role: "assistant", content: response.text ?? "" }
+    );
+
     // Obs1: needMoreProbing is the direct signal
     if (payload.needMoreProbing) {
+      this.pendingAssessPrompt = payload.nextQuestion || "";
       if (payload.nextQuestion) this.io.output(payload.nextQuestion);
       this.handleAssessRetry();
       return;

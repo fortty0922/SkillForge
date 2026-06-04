@@ -39,7 +39,8 @@ function system(stepContent: string): LLMMessage {
 
 export function buildAssessMessages(
   state: AgentState,
-  userInput: string
+  userInput: string,
+  history: LLMMessage[] = []
 ): LLMMessage[] {
   const knownConcepts = state.profile.masteredConcepts.length
     ? ` User already knows: ${state.profile.masteredConcepts.join(", ")}.`
@@ -50,6 +51,7 @@ export function buildAssessMessages(
       skill: state.profile.skill,
       knownConcepts,
     })),
+    ...history,
     { role: "user", content: userInput },
   ];
 }
