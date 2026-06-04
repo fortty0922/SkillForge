@@ -1,6 +1,8 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
+import * as fs from "fs";
+import * as path from "path";
 import * as readline from "readline";
 import { createInitialState } from "./agent/state";
 import { AgentLoop, AgentIO } from "./agent/loop";
@@ -50,9 +52,12 @@ async function main() {
 
   console.log(`\nStarting SkillForge for: "${skill}"\n`);
 
+  const ragStorePath = path.resolve("data/candidates.json");
+  fs.mkdirSync(path.dirname(ragStorePath), { recursive: true });
+
   const factory = new ProviderFactory(config);
   const state   = createInitialState(skill);
-  const loop    = new AgentLoop(state, factory, io, youtubeApiKey);
+  const loop    = new AgentLoop(state, factory, io, youtubeApiKey, undefined, ragStorePath);
 
   try {
     await loop.run();

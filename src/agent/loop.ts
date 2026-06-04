@@ -11,6 +11,13 @@ import {
 import { ProviderFactory } from "../provider/factory";
 import { searchYouTube } from "../tools/youtubeSearch";
 import { parseTimestamps } from "../tools/metadataParser";
+import {
+  RAGStore,
+  loadStore,
+  saveStore,
+  addCandidates,
+  searchLocal,
+} from "../tools/ragStore";
 
 type SearchFn = (query: string, apiKey: string) => Promise<VideoCandidate[]>;
 import {
@@ -35,19 +42,24 @@ export class AgentLoop {
   private io: AgentIO;
   private youtubeApiKey: string;
   private searchFn: SearchFn;
+  private ragStore: RAGStore;
+  private ragStorePath: string;
 
   constructor(
     state: AgentState,
     factory: ProviderFactory,
     io: AgentIO,
     youtubeApiKey = "",
-    searchFn: SearchFn = searchYouTube
+    searchFn: SearchFn = searchYouTube,
+    ragStorePath = "data/candidates.json"
   ) {
     this.state = state;
     this.factory = factory;
     this.io = io;
     this.youtubeApiKey = youtubeApiKey;
     this.searchFn = searchFn;
+    this.ragStorePath = ragStorePath;
+    this.ragStore = loadStore(ragStorePath);
   }
 
   async run(): Promise<AgentState> {
@@ -179,20 +191,33 @@ export class AgentLoop {
       const query = queryPayload?.query ?? `${s.profile.skill} ${chapter.title} tutorial`;
       this.io.output(`  [4a query] "${query}"`);
 
-      // Check candidate cache
+      // Check in-session cache first
       let candidates = s.content.candidateCache[query];
 
       if (!candidates) {
-        try {
-          candidates = await this.searchFn(query, this.youtubeApiKey);
+        // 1. Try local RAG store
+        const local = searchLocal(query, this.ragStore);
+        if (local.length > 0) {
+          this.io.output(`  [rag] ${local.length} local result(s)`);
+          candidates = local;
           s.content.candidateCache[query] = candidates;
-        } catch (err) {
-          this.io.output(`  [search error] ${(err as Error).message}`);
-          candidates = [];
+        } else {
+          // 2. Fall back to YouTube Search
+          try {
+            candidates = await this.searchFn(query, this.youtubeApiKey);
+            this.io.output(`  [search] ${candidates.length} result(s) from YouTube`);
+            // 3. Persist new results to RAG store
+            if (candidates.length > 0) {
+              addCandidates(query, candidates, this.ragStore);
+              saveStore(this.ragStore, this.ragStorePath);
+            }
+            s.content.candidateCache[query] = candidates;
+          } catch (err) {
+            this.io.output(`  [search error] ${(err as Error).message}`);
+            candidates = [];
+          }
         }
       }
-
-      this.io.output(`  [search] ${candidates.length} result(s)`);
 
       if (candidates.length === 0) {
         this.handleAttachDegrade(chapterId);
