@@ -29,9 +29,8 @@ export class RichIO implements AgentIO {
   async getUserInput(prompt: string): Promise<string> {
     this.stopSpinner();
     return new Promise((resolve) => {
-      this.rl.question(`\n${chalk.bold(prompt)}\n${chalk.cyan("❯")} `, (answer) =>
-        resolve(answer.trim())
-      );
+      process.stdout.write(`\n${chalk.bold(prompt)}\n`);
+      this.rl.question(`${chalk.cyan("❯")} `, (answer) => resolve(answer.trim()));
     });
   }
 

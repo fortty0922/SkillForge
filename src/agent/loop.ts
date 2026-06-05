@@ -100,12 +100,31 @@ export class AgentLoop {
 
     const userInput = await this.io.getUserInput(prompt);
 
+    if (!userInput.trim()) {
+      this.pendingAssessPrompt = prompt;
+      return;
+    }
+
     const provider = this.factory.forStep("assess");
-    this.io.startSpinner?.("Evaluating...");
-    const response = await provider.chat(
-      buildAssessMessages(s, userInput, this.assessHistory)
-    );
-    this.io.stopSpinner?.(true);
+    let response: import("../types").LLMResponse;
+    try {
+      this.io.startSpinner?.("Evaluating...");
+      response = await provider.chat(
+        buildAssessMessages(s, userInput, this.assessHistory)
+      );
+      this.io.stopSpinner?.(true);
+    } catch (err) {
+      this.io.stopSpinner?.(false);
+      this.assessParseErrors += 1;
+      if (this.assessParseErrors >= 3) {
+        this.io.output("(Assessment failed repeatedly — assuming beginner.)");
+        this.state.profile.level = "none";
+        this.state.planning.currentStep = "generate";
+      } else {
+        this.io.output(`(Assessment error — retrying: ${(err as Error).message})`);
+      }
+      return;
+    }
     const payload = safeParseJson<AssessResponse>(response.text ?? "");
 
     if (!payload) {
