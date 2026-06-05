@@ -131,9 +131,15 @@ export async function saveMarkdown(state: AgentState, outputDir: string): Promis
 // ── Save as PDF ────────────────────────────────────────────────────
 
 const CJK_FONT_CANDIDATES = [
-  "/System/Library/Fonts/PingFang.ttc",           // macOS PingFang
-  "/System/Library/Fonts/STHeiti Light.ttc",      // macOS Heiti
-  "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", // macOS Hiragino
+  // macOS
+  "/System/Library/Fonts/PingFang.ttc",
+  "/System/Library/Fonts/STHeiti Light.ttc",
+  "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+  // Windows
+  "C:\\Windows\\Fonts\\msjh.ttc",      // 微軟正黑體 (Traditional Chinese)
+  "C:\\Windows\\Fonts\\msyh.ttc",      // 微軟雅黑 (Simplified Chinese)
+  "C:\\Windows\\Fonts\\mingliu.ttc",   // 細明體
+  "C:\\Windows\\Fonts\\simsun.ttc",    // 宋體
 ];
 
 function findCjkFont(): string | null {
