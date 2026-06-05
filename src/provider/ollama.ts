@@ -35,7 +35,13 @@ export class OllamaProvider implements LLMProvider {
         signal: controller.signal,
       });
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
+      const e = err as Error & { code?: string };
+      const isTimeout =
+        e.name === "AbortError" ||
+        e.code === "UND_ERR_HEADERS_TIMEOUT" ||
+        e.message?.includes("UND_ERR_HEADERS_TIMEOUT");
+
+      if (isTimeout) {
         throw new Error(
           `Ollama timeout after ${this.timeoutMs / 1000}s — ` +
           `model="${this.modelName}". Try a smaller model or increase timeout via OLLAMA_TIMEOUT_MS.`
