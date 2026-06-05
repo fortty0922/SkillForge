@@ -144,6 +144,7 @@ SkillForge/
 ├── src/
 │   ├── index.ts           # CLI 入口
 │   ├── types.ts           # 所有型別定義
+│   ├── exporter.ts        # 儲存學習藍圖（.md / .pdf）
 │   ├── agent/
 │   │   ├── state.ts       # createInitialState()
 │   │   ├── prompts.ts     # 讀取 md 檔，組合 LLMMessage[]
@@ -159,6 +160,7 @@ SkillForge/
 │       └── ragStore.ts       # 本地 RAG：持久化 + 關鍵字搜尋
 ├── data/                  # 執行時自動建立，gitignored
 │   └── candidates.json    # 跨 session 影片資源庫
+├── output/                # 儲存的學習藍圖（gitignored）
 ├── .env.example
 ├── package.json
 └── tsconfig.json
@@ -197,10 +199,15 @@ GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-1.5-flash
 
 YOUTUBE_API_KEY=your_youtube_api_key_here
+
+# 選填
+GEMINI_ONLY=false          # true → 全程使用 Gemini，忽略 Ollama
+OLLAMA_TIMEOUT_MS=300000   # 預設 300s，大模型可調高
 ```
 
 > **沒有 Gemini Key？** Agent 會自動 fallback 到 Ollama 跑所有步驟。  
-> **沒有 YouTube Key？** 影片掛載步驟會跳過，輸出仍含完整講義。
+> **沒有 YouTube Key？** 影片掛載步驟會跳過，輸出仍含完整講義。  
+> **`GEMINI_ONLY=true`** 設定後，所有 6 個步驟全走 Gemini，適合 Ollama 較慢或不可用時。
 
 ---
 
@@ -221,36 +228,72 @@ npm start "TypeScript"
 ### 執行流程範例
 
 ```
-[step: assess]    [model: ollama/llama3]
+[step: assess]    [model: ollama/qwen3:9b]
 Tell me about your experience with "TypeScript".
-> I know JavaScript but never used TypeScript
+> 我完全沒有 TypeScript 經驗，但會寫 JavaScript
+  💭 User has JS experience but zero TS — level=none.
 
 [step: generate]  [model: gemini/gemini-1.5-flash]
 
-[step: choose]    [model: ollama/llama3]
+[step: choose]    [model: ollama/qwen3:9b]
 Lecture is ready! Do you prefer concept-first or practice-first?
-> practice-first
+> 我想先學概念
 
 [step: attach]    [model: gemini/gemini-1.5-flash]
-  attaching video for: "Type Annotations"
-  [4a query] "TypeScript Type Annotations tutorial"
+  attaching video for: "TypeScript 簡介"
+  [4a query] "TypeScript 簡介 教學"
   [search] 5 result(s) from YouTube      ← 第一次：打 API 並寫入本地庫
 
-  attaching video for: "Interfaces"
-  [4a query] "TypeScript Interfaces tutorial"
+  attaching video for: "型別系統基礎"
+  [4a query] "TypeScript 型別系統 教學"
   [rag] 3 local result(s)                ← 第二次起：本地庫命中，不耗配額
   ...
 
 [step: synthesize] [model: gemini/gemini-1.5-flash]
-# Learning Blueprint: TypeScript
+# 學習藍圖：TypeScript
+程度：零基礎 | 風格：概念優先
 ...
 
 [step: reflect]   [model: gemini/gemini-1.5-flash]
-  💭 Depth matches level, all chapters have valid videos.
-[reflect] Blueprint looks good for a "some" level learner.
+  💭 深度符合零基礎程度，所有章節皆有影片。
+[reflect] 藍圖品質良好。
                       ← action="approve"    → done
                       ← action="repair"     → 只重跑指定章節
                       ← action="regenerate" → 退回 generate 全部重做
+
+Save output as file? (y/n)
+> y
+
+Format:
+1. Markdown (.md)
+2. PDF (.pdf)
+> 2
+
+Saved: ./output/TypeScript_2026-06-05.pdf
+```
+
+---
+
+## 儲存輸出
+
+Agent 完成後會詢問是否將學習藍圖儲存為檔案：
+
+| 格式 | 說明 |
+|------|------|
+| `.md` | Markdown 純文字，可用任何編輯器開啟 |
+| `.pdf` | 使用系統 CJK 字體（macOS: PingFang / Windows: 微軟正黑體）渲染 |
+
+輸出路徑：`output/{技能名稱}_{日期}.{副檔名}`（目錄自動建立，已 gitignore）
+
+### 文件結構（固定模板）
+
+```
+# 學習藍圖 — {技能}
+
+## 學習者評估摘要    ← 程度 / 學習風格 / 已掌握概念 + 程度說明
+## 課程目錄          ← 章節編號列表
+## 課程內容          ← 每章標題 + 內容 + 🎬 影片連結（含時間戳）
+## 影片覆蓋摘要      ← 每章的影片狀態表格
 ```
 
 ---

@@ -135,7 +135,7 @@ Session Cache → Local RAG Store → YouTube Data API v3 → 持久化
 
 | 模組 | 對照項目 | 實作狀況 |
 |------|---------|---------|
-| Module I：Profile | 使用者畫像 | ✅ skill / level / preference；❌ 無明確 constraints 欄位 |
+| Module I：Profile | 使用者畫像 | ✅ skill / level / preference / language；❌ 無明確 constraints 欄位 |
 | Module II：Memory | Short-term | ✅ `assessHistory`（多輪對話）；❌ generate/attach 無對話歷史 |
 | Module II：Memory | Long-term RAG | ✅ 影片候選持久化；❌ 使用者偏好不跨 session |
 | Module III：Planning | Task Decomposition | ⚠️ 固定 6 步，無動態分解；有 `thought` 欄位做輕量 CoT |
@@ -154,6 +154,10 @@ Session Cache → Local RAG Store → YouTube Data API v3 → 持久化
 3. **Planning 線性固定**：6 步順序不會因技能類型調整（例如實務技能不需 choose 步驟）
 4. **無事實驗證**：講義由 LLM 參數知識生成，存在幻覺風險，未加任何驗證機制
 5. **單使用者設計**：State 為單一 JSON，未考慮多使用者並發
+
+> **已解決的前期限制：**
+> - ~~輸出語言固定英文~~ → 語言偵測機制（`profile.language`）全程注入，輸出跟隨使用者語言
+> - ~~無法儲存結果~~ → 支援匯出 `.md` / `.pdf`，含學習者評估摘要與影片覆蓋摘要
 
 ### 潛在延伸方向
 
