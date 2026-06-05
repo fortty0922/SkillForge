@@ -12,6 +12,16 @@ export const DEFAULT_POLICY: StepModelPolicy = {
   done:      "ollama",
 };
 
+export const GEMINI_ONLY_POLICY: StepModelPolicy = {
+  assess:    "gemini",
+  generate:  "gemini",
+  choose:    "gemini",
+  attach:    "gemini",
+  synthesize:"gemini",
+  reflect:   "gemini",
+  done:      "gemini",
+};
+
 export interface ProviderConfig {
   ollamaBaseUrl?: string;
   ollamaModel?: string;

@@ -6,7 +6,7 @@ import * as path from "path";
 import * as readline from "readline";
 import { createInitialState } from "./agent/state";
 import { AgentLoop, AgentIO } from "./agent/loop";
-import { ProviderFactory } from "./provider/factory";
+import { ProviderFactory, GEMINI_ONLY_POLICY } from "./provider/factory";
 
 // ── Config from environment ───────────────────────────────────────
 
@@ -56,7 +56,11 @@ async function main() {
   const ragStorePath = path.resolve("data/candidates.json");
   fs.mkdirSync(path.dirname(ragStorePath), { recursive: true });
 
-  const factory = new ProviderFactory(config);
+  const geminiOnly = process.env.GEMINI_ONLY === "true" && !!config.geminiApiKey;
+  const policy  = geminiOnly ? GEMINI_ONLY_POLICY : undefined;
+  if (geminiOnly) console.log("(Gemini-only mode enabled)\n");
+
+  const factory = new ProviderFactory(config, policy ?? {});
   const state   = createInitialState(skill);
   const loop    = new AgentLoop(state, factory, io, youtubeApiKey, undefined, ragStorePath);
 
