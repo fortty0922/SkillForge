@@ -31,6 +31,7 @@ export class OllamaProvider implements LLMProvider {
           model: this.modelName,
           messages,
           stream: false,
+          think: false,   // disable thinking mode for models that support it (e.g. qwen3)
         }),
         signal: controller.signal,
       });

@@ -1,5 +1,10 @@
 import { LLMResponse } from "../types";
 
+// Remove <think>...</think> blocks emitted by reasoning models (e.g. qwen3).
+function stripThinking(raw: string): string {
+  return raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
 // Strip markdown fences and leading/trailing noise, then parse JSON.
 // Returns null if no valid JSON found.
 function extractJson(raw: string): unknown | null {
@@ -33,7 +38,7 @@ function extractJson(raw: string): unknown | null {
 //   { "text": "...", "tool": "...", "args": {...} }
 // If "tool" is present → toolCall; otherwise → text response.
 export function parseModelOutput(raw: string): LLMResponse {
-  const parsed = extractJson(raw);
+  const parsed = extractJson(stripThinking(raw));
 
   if (parsed && typeof parsed === "object" && parsed !== null) {
     const obj = parsed as Record<string, unknown>;
