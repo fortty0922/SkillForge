@@ -7,6 +7,7 @@ import * as readline from "readline";
 import { createInitialState } from "./agent/state";
 import { AgentLoop, AgentIO } from "./agent/loop";
 import { ProviderFactory, GEMINI_ONLY_POLICY } from "./provider/factory";
+import { saveMarkdown, savePdf } from "./exporter";
 
 // ── Config from environment ───────────────────────────────────────
 
@@ -65,7 +66,22 @@ async function main() {
   const loop    = new AgentLoop(state, factory, io, youtubeApiKey, undefined, ragStorePath);
 
   try {
-    await loop.run();
+    const finalState = await loop.run();
+
+    const saveChoice = (await ask("Save output as file? (y/n)")).toLowerCase();
+    if (saveChoice === "y" || saveChoice === "yes") {
+      const fmt = await ask("Format:\n1. Markdown (.md)\n2. PDF (.pdf)");
+      const outputDir = path.resolve("output");
+      fs.mkdirSync(outputDir, { recursive: true });
+
+      let filePath: string;
+      if (fmt.trim() === "2") {
+        filePath = await savePdf(finalState, outputDir);
+      } else {
+        filePath = await saveMarkdown(finalState, outputDir);
+      }
+      console.log(`\nSaved: ${filePath}`);
+    }
   } finally {
     rl.close();
   }
