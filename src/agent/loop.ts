@@ -37,6 +37,9 @@ const MAX_SEARCH_RETRIES = 2;
 export interface AgentIO {
   getUserInput(prompt: string): Promise<string>;
   output(text: string): void;
+  startSpinner?(message: string): void;
+  stopSpinner?(ok?: boolean): void;
+  setProgress?(current: number, total: number, label: string): void;
 }
 
 export class AgentLoop {
@@ -97,9 +100,11 @@ export class AgentLoop {
     const userInput = await this.io.getUserInput(prompt);
 
     const provider = this.factory.forStep("assess");
+    this.io.startSpinner?.("Evaluating...");
     const response = await provider.chat(
       buildAssessMessages(s, userInput, this.assessHistory)
     );
+    this.io.stopSpinner?.(true);
     const payload = safeParseJson<AssessResponse>(response.text ?? "");
 
     if (!payload) {
@@ -152,7 +157,9 @@ export class AgentLoop {
   private async stepGenerate(): Promise<void> {
     const s = this.state;
     const provider = this.factory.forStep("generate");
+    this.io.startSpinner?.("Generating lecture...");
     const response = await provider.chat(buildGenerateMessages(s));
+    this.io.stopSpinner?.(true);
     const payload = safeParseJson<{ chapters: { id: string; title: string; body: string }[] }>(
       response.text ?? ""
     );
@@ -176,7 +183,9 @@ export class AgentLoop {
     );
 
     const provider = this.factory.forStep("choose");
+    this.io.startSpinner?.("Analyzing preference...");
     const response = await provider.chat(buildChooseMessages(s, userInput));
+    this.io.stopSpinner?.(true);
     const payload = safeParseJson<ChooseResponse>(response.text ?? "");
 
     if (payload?.recommendation) this.io.output(payload.recommendation);
@@ -226,14 +235,16 @@ export class AgentLoop {
     while (getNextChapter() !== null) {
       const chapter = getNextChapter()!;
       const chapterId = chapter.id;
-
-      this.io.output(`  attaching video for: "${chapter.title}"`);
+      const currentIdx = isRepairMode ? repairCursor : s.planning.attachCursor;
+      this.io.setProgress?.(currentIdx + 1, chapters.length, chapter.title);
 
       // 4a: generate search query via LLM
       const provider = this.factory.forStep("attach");
+      this.io.startSpinner?.("Generating query...");
       const queryResponse = await provider.chat(
         buildAttach4aMessages(chapter.title, s)
       );
+      this.io.stopSpinner?.(true);
       const queryPayload = safeParseJson<Attach4aResponse>(queryResponse.text ?? "");
       const query = queryPayload?.query ?? `${s.profile.skill} ${chapter.title} tutorial`;
       this.io.output(`  [4a query] "${query}"`);
@@ -273,9 +284,11 @@ export class AgentLoop {
       }
 
       // 4b: judge relevance — pass candidates first, timestamps derived after pick
+      this.io.startSpinner?.("Judging relevance...");
       const judgeResponse = await provider.chat(
         buildAttach4bMessages(chapter.title, candidates, parseTimestamps(candidates[0].description), s.profile.language)
       );
+      this.io.stopSpinner?.(true);
       const judgePayload = safeParseJson<Attach4bResponse>(judgeResponse.text ?? "");
 
       // Obs3: adequate is the direct signal
@@ -357,7 +370,9 @@ export class AgentLoop {
   private async stepReflect(): Promise<void> {
     const s = this.state;
     const provider = this.factory.forStep("reflect");
+    this.io.startSpinner?.("Evaluating blueprint quality...");
     const response = await provider.chat(buildReflectMessages(s));
+    this.io.stopSpinner?.(true);
     const payload = safeParseJson<ReflectResponse>(response.text ?? "");
 
     if (!payload) {

@@ -4,10 +4,12 @@ dotenv.config();
 import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline";
+import chalk from "chalk";
 import { createInitialState } from "./agent/state";
-import { AgentLoop, AgentIO } from "./agent/loop";
+import { AgentLoop } from "./agent/loop";
 import { ProviderFactory, GEMINI_ONLY_POLICY } from "./provider/factory";
 import { saveMarkdown, savePdf } from "./exporter";
+import { RichIO } from "./cli";
 
 // ── Config from environment ───────────────────────────────────────
 
@@ -23,44 +25,29 @@ const youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
 
 // ── CLI IO ────────────────────────────────────────────────────────
 
-const rl = readline.createInterface({
-  input:  process.stdin,
-  output: process.stdout,
-});
-
-function ask(prompt: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(`\n${prompt}\n> `, (answer) => resolve(answer.trim()));
-  });
-}
-
-const io: AgentIO = {
-  getUserInput: ask,
-  output(text: string) {
-    console.log(text);
-  },
-};
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const io = new RichIO(rl);
 
 // ── Main ──────────────────────────────────────────────────────────
 
 async function main() {
   const skillArg = process.argv[2];
-  const skill = skillArg ?? (await ask("What skill do you want to learn?"));
+  const skill = skillArg ?? (await io.getUserInput("What skill do you want to learn?"));
 
   if (!skill) {
-    console.error("No skill provided. Usage: ts-node src/index.ts <skill>");
+    console.error(chalk.red("No skill provided. Usage: ts-node src/index.ts <skill>"));
     process.exit(1);
   }
 
-  console.log(`\nStarting SkillForge for: "${skill}"\n`);
+  console.log(chalk.bold(`\n🎯  SkillForge — ${skill}\n`));
 
   const ragStorePath = path.resolve("data/candidates.json");
   fs.mkdirSync(path.dirname(ragStorePath), { recursive: true });
 
   const geminiOnly = process.env.GEMINI_ONLY === "true" && !!config.geminiApiKey;
-  const policy  = geminiOnly ? GEMINI_ONLY_POLICY : undefined;
-  if (geminiOnly) console.log("(Gemini-only mode enabled)\n");
+  if (geminiOnly) console.log(chalk.dim("  (Gemini-only mode)\n"));
 
+  const policy  = geminiOnly ? GEMINI_ONLY_POLICY : undefined;
   const factory = new ProviderFactory(config, policy ?? {});
   const state   = createInitialState(skill);
   const loop    = new AgentLoop(state, factory, io, youtubeApiKey, undefined, ragStorePath);
@@ -68,9 +55,11 @@ async function main() {
   try {
     const finalState = await loop.run();
 
-    const saveChoice = (await ask("Save output as file? (y/n)")).toLowerCase();
+    console.log("\n" + chalk.bold.green("✓  Complete!"));
+
+    const saveChoice = (await io.getUserInput("Save output as file? (y/n)")).toLowerCase();
     if (saveChoice === "y" || saveChoice === "yes") {
-      const fmt = await ask("Format:\n1. Markdown (.md)\n2. PDF (.pdf)");
+      const fmt = await io.getUserInput("Format:\n  1. Markdown (.md)\n  2. PDF (.pdf)");
       const outputDir = path.resolve("output");
       fs.mkdirSync(outputDir, { recursive: true });
 
@@ -80,7 +69,7 @@ async function main() {
       } else {
         filePath = await saveMarkdown(finalState, outputDir);
       }
-      console.log(`\nSaved: ${filePath}`);
+      console.log(chalk.green(`\n  Saved: ${chalk.underline(filePath)}`));
     }
   } finally {
     rl.close();
@@ -88,7 +77,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("Fatal:", err);
+  console.error(chalk.red("Fatal:"), err);
   rl.close();
   process.exit(1);
 });

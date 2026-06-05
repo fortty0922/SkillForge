@@ -145,6 +145,7 @@ SkillForge/
 │   ├── index.ts           # CLI 入口
 │   ├── types.ts           # 所有型別定義
 │   ├── exporter.ts        # 儲存學習藍圖（.md / .pdf）
+│   ├── cli.ts             # RichIO：顏色、spinner、進度條
 │   ├── agent/
 │   │   ├── state.ts       # createInitialState()
 │   │   ├── prompts.ts     # 讀取 md 檔，組合 LLMMessage[]
@@ -225,51 +226,55 @@ npm run build
 npm start "TypeScript"
 ```
 
-### 執行流程範例
+### 執行流程範例（含視覺化輸出）
 
 ```
-[step: assess]    [model: ollama/qwen3:9b]
+🎯  SkillForge — TypeScript
+
+◆ assess     [model: ollama/qwen3:9b]       ← 藍色步驟標頭
 Tell me about your experience with "TypeScript".
-> 我完全沒有 TypeScript 經驗，但會寫 JavaScript
+❯ 我完全沒有 TypeScript 經驗，但會寫 JavaScript
+⠋ Evaluating...                             ← spinner（等待 LLM）
   💭 User has JS experience but zero TS — level=none.
 
-[step: generate]  [model: gemini/gemini-1.5-flash]
+◆ generate   [model: gemini/gemini-1.5-flash]
+⠋ Generating lecture...
 
-[step: choose]    [model: ollama/qwen3:9b]
+◆ choose     [model: ollama/qwen3:9b]
 Lecture is ready! Do you prefer concept-first or practice-first?
-> 我想先學概念
+❯ 我想先學概念
+⠋ Analyzing preference...
 
-[step: attach]    [model: gemini/gemini-1.5-flash]
-  attaching video for: "TypeScript 簡介"
+◆ attach     [model: gemini/gemini-1.5-flash]
+  [1 / 5]  ████████░░░░  60%  TypeScript 簡介    ← 進度條
+  ⠋ Generating query...
   [4a query] "TypeScript 簡介 教學"
-  [search] 5 result(s) from YouTube      ← 第一次：打 API 並寫入本地庫
+  [search] 5 result(s) from YouTube             ← 綠色，第一次打 API
 
-  attaching video for: "型別系統基礎"
-  [4a query] "TypeScript 型別系統 教學"
-  [rag] 3 local result(s)                ← 第二次起：本地庫命中，不耗配額
-  ...
+  [2 / 5]  ████████████  80%  型別系統基礎
+  [rag] 3 local result(s)                       ← 綠色，本地庫命中
 
-[step: synthesize] [model: gemini/gemini-1.5-flash]
+◆ synthesize [model: gemini/gemini-1.5-flash]
+──────────────────────────────────────────────────
 # 學習藍圖：TypeScript
-程度：零基礎 | 風格：概念優先
 ...
 
-[step: reflect]   [model: gemini/gemini-1.5-flash]
+◆ reflect    [model: gemini/gemini-1.5-flash]
+⠋ Evaluating blueprint quality...
   💭 深度符合零基礎程度，所有章節皆有影片。
-[reflect] 藍圖品質良好。
-                      ← action="approve"    → done
-                      ← action="repair"     → 只重跑指定章節
-                      ← action="regenerate" → 退回 generate 全部重做
+  ✓  藍圖品質良好。                             ← 綠色 approve
+
+✓  Complete!
 
 Save output as file? (y/n)
-> y
+❯ y
 
 Format:
-1. Markdown (.md)
-2. PDF (.pdf)
-> 2
+  1. Markdown (.md)
+  2. PDF (.pdf)
+❯ 2
 
-Saved: ./output/TypeScript_2026-06-05.pdf
+  Saved: ./output/TypeScript_2026-06-05.pdf
 ```
 
 ---

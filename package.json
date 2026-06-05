@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@types/pdfkit": "^0.17.6",
+    "chalk": "^4.1.2",
     "dotenv": "^17.4.2",
     "node-fetch": "^3.3.2",
+    "ora": "^5.4.1",
     "pdfkit": "^0.18.0"
   },
   "devDependencies": {
