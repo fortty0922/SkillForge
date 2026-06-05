@@ -133,7 +133,6 @@ export class AgentLoop {
     // Obs1: needMoreProbing is the direct signal
     if (payload.needMoreProbing) {
       this.pendingAssessPrompt = payload.nextQuestion || "";
-      if (payload.nextQuestion) this.io.output(payload.nextQuestion);
       this.handleAssessRetry();
       return;
     }
