@@ -13,4 +13,5 @@ Rules:
 - When level is clear, set needMoreProbing=false and fill masteredConcepts with topics the user already knows.
 - If the user says "no experience" or "zero", set level="none" immediately without further probing.
 
-Schema: { "level": "none"|"some"|"advanced"|null, "masteredConcepts": string[], "needMoreProbing": boolean, "nextQuestion": string }
+Detect the language the user is writing in and report it as a plain English name (e.g. "Traditional Chinese", "Simplified Chinese", "English", "Japanese").
+Schema: { "level": "none"|"some"|"advanced"|null, "masteredConcepts": string[], "needMoreProbing": boolean, "nextQuestion": string, "language": string }

@@ -132,6 +132,7 @@ export class AgentLoop {
     // Level is clear → advance
     s.profile.level = payload.level;
     s.profile.masteredConcepts = payload.masteredConcepts ?? [];
+    if (payload.language) s.profile.language = payload.language;
     s.planning.currentStep = "generate";
   }
 
@@ -273,7 +274,7 @@ export class AgentLoop {
 
       // 4b: judge relevance — pass candidates first, timestamps derived after pick
       const judgeResponse = await provider.chat(
-        buildAttach4bMessages(chapter.title, candidates, parseTimestamps(candidates[0].description))
+        buildAttach4bMessages(chapter.title, candidates, parseTimestamps(candidates[0].description), s.profile.language)
       );
       const judgePayload = safeParseJson<Attach4bResponse>(judgeResponse.text ?? "");
 
@@ -318,9 +319,10 @@ export class AgentLoop {
 
   private async stepSynthesize(): Promise<void> {
     const s = this.state;
+    const lang = s.profile.language;
     const lines: string[] = [
-      `# Learning Blueprint: ${s.profile.skill}`,
-      `Level: ${s.profile.level} | Style: ${s.profile.preference ?? "default"}`,
+      `# ${localizeLabel("blueprint", lang)}: ${s.profile.skill}`,
+      `${localizeLabel("level", lang)}: ${s.profile.level} | ${localizeLabel("style", lang)}: ${s.profile.preference ?? localizeLabel("default", lang)}`,
       "",
     ];
 
@@ -340,7 +342,7 @@ export class AgentLoop {
           })${ts}`
         );
       } else if (s.control.degraded.includes(chapter.id)) {
-        lines.push("_(no suitable video found for this chapter)_");
+        lines.push(`_(${localizeLabel("noVideo", lang)})_`);
       }
 
       lines.push("");
@@ -444,4 +446,20 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+const LABELS: Record<string, Record<string, string>> = {
+  blueprint: { "Traditional Chinese": "學習藍圖", "Simplified Chinese": "学习蓝图", "Japanese": "学習ブループリント" },
+  level:     { "Traditional Chinese": "程度",     "Simplified Chinese": "程度",     "Japanese": "レベル" },
+  style:     { "Traditional Chinese": "風格",     "Simplified Chinese": "风格",     "Japanese": "スタイル" },
+  default:   { "Traditional Chinese": "預設",     "Simplified Chinese": "默认",     "Japanese": "デフォルト" },
+  noVideo:   {
+    "Traditional Chinese": "此章節未找到合適影片",
+    "Simplified Chinese":  "此章节未找到合适视频",
+    "Japanese":            "この章に適した動画が見つかりませんでした",
+  },
+};
+
+function localizeLabel(key: string, language: string): string {
+  return LABELS[key]?.[language] ?? LABELS[key]?.["English"] ?? key;
 }

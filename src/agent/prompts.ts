@@ -21,7 +21,6 @@ function loadPrompt(name: string): string {
 }
 
 // ── Template renderer ─────────────────────────────────────────────
-// Replaces {{key}} placeholders with values. Missing keys become "".
 
 function render(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -34,6 +33,13 @@ function system(stepContent: string): LLMMessage {
     role: "system",
     content: `${loadPrompt("base")}\n\n${stepContent}`,
   };
+}
+
+// ── Language instruction appended to user messages ────────────────
+// Ensures LLM outputs in user's language when no user text is present.
+
+function langInstruction(language: string): string {
+  return language ? ` Respond in ${language}.` : "";
 }
 
 // ── Prompt registry ────────────────────────────────────────────────
@@ -58,16 +64,16 @@ export function buildAssessMessages(
 }
 
 export function buildGenerateMessages(state: AgentState): LLMMessage[] {
-  const { skill, level, masteredConcepts, preference } = state.profile;
+  const { skill, level, masteredConcepts, preference, language } = state.profile;
   const feedback = state.planning.reflectFeedback
     ? ` Previous attempt was rejected — improve as follows: ${state.planning.reflectFeedback}`
     : "";
 
-  const rewrites = state.planning.repairQueue.filter((r) => r.type === "rewrite");
+  const rewrites = state.planning.repairQueue.filter((r: ChapterRepair) => r.type === "rewrite");
   const rewriteInstruction =
     rewrites.length > 0
       ? ` IMPORTANT: Only rewrite these specific chapters (keep all others unchanged): ${rewrites
-          .map((r) => `${r.id} (reason: ${r.reason})`)
+          .map((r: ChapterRepair) => `${r.id} (reason: ${r.reason})`)
           .join(", ")}.`
       : "";
 
@@ -80,12 +86,81 @@ export function buildGenerateMessages(state: AgentState): LLMMessage[] {
         : "",
       learningStyle: preference ? ` Learning style: ${preference}.` : "",
     })),
-    { role: "user", content: `Generate the lecture now.${feedback}${rewriteInstruction}` },
+    {
+      role: "user",
+      content: `Generate the lecture now.${feedback}${rewriteInstruction}${langInstruction(language)}`,
+    },
+  ];
+}
+
+export function buildChooseMessages(
+  state: AgentState,
+  userInput: string
+): LLMMessage[] {
+  const outline = state.content.lecture
+    .map((ch) => `- ${ch.title}`)
+    .join("\n");
+
+  return [
+    system(render(loadPrompt("choose"), {
+      skill: state.profile.skill,
+      level: state.profile.level ?? "unknown",
+    })),
+    {
+      role: "user",
+      content:
+        `Curriculum outline:\n${outline}\n\nUser preference input: "${userInput}"` +
+        langInstruction(state.profile.language),
+    },
+  ];
+}
+
+export function buildAttach4aMessages(
+  chapterTitle: string,
+  state: AgentState
+): LLMMessage[] {
+  return [
+    system(loadPrompt("attach-4a")),
+    {
+      role: "user",
+      content:
+        `Skill: "${state.profile.skill}" | Level: "${state.profile.level}"\n` +
+        `Chapter title: "${chapterTitle}"` +
+        langInstruction(state.profile.language),
+    },
+  ];
+}
+
+export function buildAttach4bMessages(
+  chapterTitle: string,
+  candidates: VideoCandidate[],
+  timestamps: TimestampEntry[],
+  language = ""
+): LLMMessage[] {
+  const candidateList = candidates
+    .map((c, i) => `${i}. [${c.videoId}] "${c.title}" by ${c.channelTitle}`)
+    .join("\n");
+
+  const tsInfo =
+    timestamps.length > 0
+      ? timestamps.map((t) => `  ${t.startTime}s–${t.endTime}s: ${t.label}`).join("\n")
+      : "  (no chapter timestamps found)";
+
+  return [
+    system(loadPrompt("attach-4b")),
+    {
+      role: "user",
+      content:
+        `Chapter: "${chapterTitle}"\n\n` +
+        `Candidates:\n${candidateList}\n\n` +
+        `Timestamps from top candidate:\n${tsInfo}` +
+        langInstruction(language),
+    },
   ];
 }
 
 export function buildReflectMessages(state: AgentState): LLMMessage[] {
-  const { skill, level, preference } = state.profile;
+  const { skill, level, preference, language } = state.profile;
   const { lecture, videoMap } = state.content;
   const { degraded } = state.control;
 
@@ -113,68 +188,8 @@ export function buildReflectMessages(state: AgentState): LLMMessage[] {
       content:
         `Skill: "${skill}" | Level: "${level}" | Style: "${preference ?? "default"}"\n` +
         `Chapters: ${lecture.length} | Degraded: ${degraded.length} | Valid timestamps: ${validTimestamps}\n\n` +
-        `Blueprint:\n${outline}`,
-    },
-  ];
-}
-
-export function buildChooseMessages(
-  state: AgentState,
-  userInput: string
-): LLMMessage[] {
-  const outline = state.content.lecture
-    .map((ch) => `- ${ch.title}`)
-    .join("\n");
-
-  return [
-    system(render(loadPrompt("choose"), {
-      skill: state.profile.skill,
-      level: state.profile.level ?? "unknown",
-    })),
-    {
-      role: "user",
-      content: `Curriculum outline:\n${outline}\n\nUser preference input: "${userInput}"`,
-    },
-  ];
-}
-
-export function buildAttach4aMessages(
-  chapterTitle: string,
-  state: AgentState
-): LLMMessage[] {
-  return [
-    system(loadPrompt("attach-4a")),
-    {
-      role: "user",
-      content:
-        `Skill: "${state.profile.skill}" | Level: "${state.profile.level}"\n` +
-        `Chapter title: "${chapterTitle}"`,
-    },
-  ];
-}
-
-export function buildAttach4bMessages(
-  chapterTitle: string,
-  candidates: VideoCandidate[],
-  timestamps: TimestampEntry[]
-): LLMMessage[] {
-  const candidateList = candidates
-    .map((c, i) => `${i}. [${c.videoId}] "${c.title}" by ${c.channelTitle}`)
-    .join("\n");
-
-  const tsInfo =
-    timestamps.length > 0
-      ? timestamps.map((t) => `  ${t.startTime}s–${t.endTime}s: ${t.label}`).join("\n")
-      : "  (no chapter timestamps found)";
-
-  return [
-    system(loadPrompt("attach-4b")),
-    {
-      role: "user",
-      content:
-        `Chapter: "${chapterTitle}"\n\n` +
-        `Candidates:\n${candidateList}\n\n` +
-        `Timestamps from top candidate:\n${tsInfo}`,
+        `Blueprint:\n${outline}` +
+        langInstruction(language),
     },
   ];
 }

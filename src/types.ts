@@ -40,6 +40,7 @@ export interface AgentState {
     level: Level;
     masteredConcepts: string[];
     preference: Preference;
+    language: string; // detected from user's first input, e.g. "Traditional Chinese"
   };
   planning: {
     currentStep: Step;
@@ -96,6 +97,7 @@ export interface AssessResponse {
   masteredConcepts: string[];
   needMoreProbing: boolean;  // Obs1 signal
   nextQuestion: string;      // question to show user when needMoreProbing=true
+  language: string;          // detected user language, e.g. "Traditional Chinese", "English"
 }
 
 export interface GenerateResponse {

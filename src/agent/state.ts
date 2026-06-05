@@ -7,6 +7,7 @@ export function createInitialState(skill: string): AgentState {
       level: null,
       masteredConcepts: [],
       preference: null,
+      language: "",
     },
     planning: {
       currentStep: "assess",

@@ -77,6 +77,7 @@ const assessOk = () => ({
   thought: "User knows basics.",
   level: "some", masteredConcepts: ["variables", "loops"],
   needMoreProbing: false, nextQuestion: "",
+  language: "Traditional Chinese",
 });
 
 const generateOk = () => ({ chapters: CHAPTERS });
@@ -124,6 +125,7 @@ async function caseA(): Promise<boolean> {
     s.planning.currentStep === "done" &&
     s.profile.level === "some" &&
     s.profile.preference === "practice-first" &&
+    s.profile.language === "Traditional Chinese" &&
     s.planning.directionChosen === true &&
     s.planning.attachCursor === 3 &&
     s.planning.repairQueue.length === 0 &&
