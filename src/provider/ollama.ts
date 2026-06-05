@@ -1,7 +1,7 @@
 import { LLMMessage, LLMProvider, LLMResponse } from "../types";
 import { parseModelOutput } from "./parseResponse";
 
-const DEFAULT_TIMEOUT_MS = 120_000; // 2 min — local models can be slow
+const DEFAULT_TIMEOUT_MS = 300_000; // 5 min — large local models need time to load + infer
 
 export class OllamaProvider implements LLMProvider {
   readonly modelName: string;
@@ -29,9 +29,8 @@ export class OllamaProvider implements LLMProvider {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: this.modelName,
-          messages,
+          messages: this.disableThinking(messages),
           stream: false,
-          think: false,   // disable thinking mode for models that support it (e.g. qwen3)
         }),
         signal: controller.signal,
       });
@@ -45,7 +44,7 @@ export class OllamaProvider implements LLMProvider {
       if (isTimeout) {
         throw new Error(
           `Ollama timeout after ${this.timeoutMs / 1000}s — ` +
-          `model="${this.modelName}". Try a smaller model or increase timeout via OLLAMA_TIMEOUT_MS.`
+          `model="${this.modelName}". Increase timeout via OLLAMA_TIMEOUT_MS.`
         );
       }
       throw err;
@@ -63,5 +62,17 @@ export class OllamaProvider implements LLMProvider {
 
     const raw = data.choices[0]?.message?.content ?? "";
     return parseModelOutput(raw);
+  }
+
+  // Append /no_think to the last user message — works for qwen3 and
+  // other thinking models regardless of API endpoint version.
+  private disableThinking(messages: LLMMessage[]): LLMMessage[] {
+    if (!messages.length) return messages;
+    const last = messages[messages.length - 1];
+    if (last.role !== "user") return messages;
+    return [
+      ...messages.slice(0, -1),
+      { ...last, content: `${last.content} /no_think` },
+    ];
   }
 }
