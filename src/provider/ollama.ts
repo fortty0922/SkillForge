@@ -1,25 +1,50 @@
 import { LLMMessage, LLMProvider, LLMResponse } from "../types";
 import { parseModelOutput } from "./parseResponse";
 
+const DEFAULT_TIMEOUT_MS = 120_000; // 2 min — local models can be slow
+
 export class OllamaProvider implements LLMProvider {
   readonly modelName: string;
   private baseUrl: string;
+  private timeoutMs: number;
 
-  constructor(baseUrl = "http://localhost:11434", model = "llama3") {
+  constructor(
+    baseUrl = "http://localhost:11434",
+    model = "llama3",
+    timeoutMs = DEFAULT_TIMEOUT_MS
+  ) {
     this.baseUrl = baseUrl;
     this.modelName = model;
+    this.timeoutMs = timeoutMs;
   }
 
   async chat(messages: LLMMessage[]): Promise<LLMResponse> {
-    const res = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: this.modelName,
-        messages,
-        stream: false,
-      }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.modelName,
+          messages,
+          stream: false,
+        }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if ((err as Error).name === "AbortError") {
+        throw new Error(
+          `Ollama timeout after ${this.timeoutMs / 1000}s — ` +
+          `model="${this.modelName}". Try a smaller model or increase timeout via OLLAMA_TIMEOUT_MS.`
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (!res.ok) {
       throw new Error(`Ollama error ${res.status}: ${await res.text()}`);

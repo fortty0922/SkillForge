@@ -15,6 +15,7 @@ export const DEFAULT_POLICY: StepModelPolicy = {
 export interface ProviderConfig {
   ollamaBaseUrl?: string;
   ollamaModel?: string;
+  ollamaTimeoutMs?: number;
   geminiApiKey?: string;
   geminiModel?: string;
 }
@@ -25,7 +26,7 @@ export class ProviderFactory {
   private policy: StepModelPolicy;
 
   constructor(config: ProviderConfig = {}, policy: Partial<StepModelPolicy> = {}) {
-    this.ollama = new OllamaProvider(config.ollamaBaseUrl, config.ollamaModel);
+    this.ollama = new OllamaProvider(config.ollamaBaseUrl, config.ollamaModel, config.ollamaTimeoutMs);
     this.gemini = config.geminiApiKey
       ? new GeminiProvider(config.geminiApiKey, config.geminiModel)
       : null;

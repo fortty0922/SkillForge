@@ -11,10 +11,11 @@ import { ProviderFactory } from "./provider/factory";
 // ── Config from environment ───────────────────────────────────────
 
 const config = {
-  ollamaBaseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
-  ollamaModel:   process.env.OLLAMA_MODEL   ?? "llama3",
-  geminiApiKey:  process.env.GEMINI_API_KEY ?? "",
-  geminiModel:   process.env.GEMINI_MODEL   ?? "gemini-1.5-flash",
+  ollamaBaseUrl:   process.env.OLLAMA_BASE_URL    ?? "http://localhost:11434",
+  ollamaModel:     process.env.OLLAMA_MODEL       ?? "llama3",
+  ollamaTimeoutMs: process.env.OLLAMA_TIMEOUT_MS  ? Number(process.env.OLLAMA_TIMEOUT_MS) : undefined,
+  geminiApiKey:    process.env.GEMINI_API_KEY     ?? "",
+  geminiModel:     process.env.GEMINI_MODEL       ?? "gemini-1.5-flash",
 };
 
 const youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
