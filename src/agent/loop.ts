@@ -31,7 +31,7 @@ import {
   buildReflectMessages,
 } from "./prompts";
 
-const MAX_ASSESS_RETRIES = 2;
+const MAX_ASSESS_RETRIES = 3;
 const MAX_SEARCH_RETRIES = 2;
 
 export interface AgentIO {
@@ -52,6 +52,7 @@ export class AgentLoop {
   private ragStorePath: string;
   private assessHistory: LLMMessage[] = [];
   private pendingAssessPrompt = "";
+  private assessParseErrors = 0;
 
   constructor(
     state: AgentState,
@@ -108,10 +109,18 @@ export class AgentLoop {
     const payload = safeParseJson<AssessResponse>(response.text ?? "");
 
     if (!payload) {
-      this.handleAssessRetry("(Could not parse assessment response — retrying)");
+      this.assessParseErrors += 1;
+      if (this.assessParseErrors >= 3) {
+        this.io.output("(Assessment parse failed repeatedly — assuming beginner.)");
+        this.state.profile.level = "none";
+        this.state.planning.currentStep = "generate";
+      } else {
+        this.io.output("(Could not parse assessment response — retrying)");
+      }
       return;
     }
 
+    this.assessParseErrors = 0;
     const thought = payload.thought;
     if (thought) this.io.output(`  💭 ${thought}`);
 
